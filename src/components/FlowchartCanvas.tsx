@@ -67,7 +67,7 @@ export const FlowchartCanvas = () => {
         mouseY, 
         nodes, 
         isConnecting.nodeId, 
-        60,
+        50,
         connections,
         isConnecting.startType
       );
@@ -99,8 +99,23 @@ export const FlowchartCanvas = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  React.useEffect(() => {
+    // Disable text selection on body when connecting
+    if (isConnecting) {
+      document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+    } else {
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+    }
+    
+    return () => {
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+    };
+  }, [isConnecting]);
+
   const startConnection = useCallback((nodeId: string, position: { x: number; y: number }, side: string) => {
-    // Determine if this is an entry or exit point
     const node = nodes.find(n => n.id === nodeId);
     let startType: 'entry' | 'exit' = 'exit';
     
@@ -108,7 +123,8 @@ export const FlowchartCanvas = () => {
       if (node.type === 'condition') {
         startType = side === 'top' ? 'entry' : 'exit';
       } else {
-        startType = side === 'right' ? 'exit' : 'entry';
+        // For dynamic ports, default to exit but can be changed
+        startType = 'exit';
       }
     }
     
@@ -136,14 +152,16 @@ export const FlowchartCanvas = () => {
         addConnection({
           id: `${sourceId}-${targetId}-${Date.now()}`,
           sourceId,
-          targetId
+          targetId,
+          sourcePort: isConnecting.startSide,
+          targetPort: highlightedPoint?.side
         });
       }
     }
     setIsConnecting(null);
     setTempConnection(null);
     setHighlightedPoint(null);
-  }, [isConnecting, addConnection, connections]);
+  }, [isConnecting, addConnection, connections, highlightedPoint]);
 
   return (
     <div className="relative h-full overflow-hidden bg-gray-50">
@@ -159,12 +177,22 @@ export const FlowchartCanvas = () => {
         }}
       />
       
+      {/* CSS for dash animation */}
+      <style>{`
+        @keyframes dash {
+          to {
+            stroke-dashoffset: -12;
+          }
+        }
+      `}</style>
+      
       <div
         ref={canvasRef}
         className="relative h-full w-full cursor-crosshair"
         onContextMenu={handleRightClick}
         onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
+        style={{ userSelect: isConnecting ? 'none' : 'auto' }}
       >
         {/* SVG layer for connections */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
@@ -174,6 +202,7 @@ export const FlowchartCanvas = () => {
               connection={connection}
               nodes={nodes}
               onDelete={() => deleteConnection(connection.id)}
+              existingConnections={connections}
             />
           ))}
           
@@ -208,6 +237,7 @@ export const FlowchartCanvas = () => {
             onStartConnection={startConnection}
             onEndConnection={endConnection}
             existingConnections={connections}
+            isConnecting={!!isConnecting}
             style={{ zIndex: 2 }}
           />
         ))}

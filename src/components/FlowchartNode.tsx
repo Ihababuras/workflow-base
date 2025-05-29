@@ -22,6 +22,7 @@ interface FlowchartNodeProps {
   onEndConnection: (nodeId: string) => void;
   existingConnections: Array<{ sourceId: string; targetId: string }>;
   style?: React.CSSProperties;
+  isConnecting?: boolean;
 }
 
 const getNodeStyle = (type: string) => {
@@ -66,7 +67,8 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
   onStartConnection,
   onEndConnection,
   existingConnections,
-  style
+  style,
+  isConnecting = false
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -86,31 +88,17 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
         { id: 'right', x: node.x + 108, y: node.y + 40, side: 'right', type: 'exit' }
       ];
     } else {
-      // Step/notification: left, top, bottom (entries), right (exit)
+      // Step/notification: all sides can be entry or exit
       return [
-        { id: 'left', x: node.x, y: node.y + 40, side: 'left', type: 'entry' },
-        { id: 'top', x: node.x + 72, y: node.y, side: 'top', type: 'entry' },
-        { id: 'bottom', x: node.x + 72, y: node.y + 80, side: 'bottom', type: 'entry' },
-        { id: 'right', x: node.x + 144, y: node.y + 40, side: 'right', type: 'exit' }
+        { id: 'left', x: node.x, y: node.y + 40, side: 'left', type: 'dynamic' },
+        { id: 'top', x: node.x + 72, y: node.y, side: 'top', type: 'dynamic' },
+        { id: 'bottom', x: node.x + 72, y: node.y + 80, side: 'bottom', type: 'dynamic' },
+        { id: 'right', x: node.x + 144, y: node.y + 40, side: 'right', type: 'dynamic' }
       ];
     }
   };
 
   const connectionPoints = getConnectionPoints();
-
-  // Check if connection already exists
-  const hasConnection = (sourceId: string, targetId: string) => {
-    return existingConnections.some(conn => 
-      (conn.sourceId === sourceId && conn.targetId === targetId) ||
-      (conn.sourceId === targetId && conn.targetId === sourceId)
-    );
-  };
-
-  // Check if node already has an exit connection (for steps)
-  const hasExitConnection = () => {
-    if (node.type === 'condition') return false; // Conditions can have multiple exits
-    return existingConnections.some(conn => conn.sourceId === node.id);
-  };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target instanceof HTMLInputElement) return;
@@ -164,8 +152,10 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
 
   const handleLabelClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsEditing(true);
-  }, []);
+    if (!isConnecting) {
+      setIsEditing(true);
+    }
+  }, [isConnecting]);
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditing(false);
@@ -173,14 +163,8 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
 
   const handleConnectionStart = useCallback((e: React.MouseEvent, point: any) => {
     e.stopPropagation();
-    
-    // Check if this point can be used for starting a connection
-    if (point.type === 'exit' && hasExitConnection() && node.type !== 'condition') {
-      return; // Step already has an exit connection
-    }
-    
     onStartConnection(node.id, { x: point.x, y: point.y }, point.side);
-  }, [node.id, node.type, onStartConnection, hasExitConnection]);
+  }, [node.id, onStartConnection]);
 
   const handleConnectionEnd = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -198,6 +182,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
               style={{
                 left: node.x,
                 top: node.y,
+                userSelect: isConnecting ? 'none' : 'auto',
                 ...style
               }}
             >
@@ -205,7 +190,8 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                 className={cn(
                   'relative w-36 h-20 cursor-move transition-all duration-200 hover:shadow-lg',
                   isSelected && 'ring-2 ring-blue-500 ring-offset-2',
-                  isDragging && 'shadow-xl scale-105'
+                  isDragging && 'shadow-xl scale-105',
+                  isConnecting && 'pointer-events-none'
                 )}
                 onMouseDown={handleMouseDown}
                 onDoubleClick={handleDoubleClick}
@@ -238,7 +224,10 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                       />
                     ) : (
                       <div
-                        className="text-xs font-medium truncate cursor-text"
+                        className={cn(
+                          'text-xs font-medium truncate cursor-text',
+                          isConnecting && 'pointer-events-none select-none'
+                        )}
                         onClick={handleLabelClick}
                       >
                         {label}
@@ -292,6 +281,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
             style={{
               left: node.x,
               top: node.y,
+              userSelect: isConnecting ? 'none' : 'auto',
               ...style
             }}
           >
@@ -300,7 +290,8 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                 'relative w-36 h-20 cursor-move transition-all duration-200 hover:shadow-lg',
                 nodeStyle.bg,
                 isSelected && 'ring-2 ring-blue-500 ring-offset-2',
-                isDragging && 'shadow-xl scale-105'
+                isDragging && 'shadow-xl scale-105',
+                isConnecting && 'pointer-events-none'
               )}
               onMouseDown={handleMouseDown}
               onDoubleClick={handleDoubleClick}
@@ -326,7 +317,10 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                   />
                 ) : (
                   <div
-                    className="text-sm font-medium truncate cursor-text"
+                    className={cn(
+                      'text-sm font-medium truncate cursor-text',
+                      isConnecting && 'pointer-events-none select-none'
+                    )}
                     onClick={handleLabelClick}
                   >
                     {label}
@@ -341,8 +335,8 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                   className={cn(
                     'absolute w-3 h-3 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
                     hoveredDot === point.id && 'scale-150',
-                    point.type === 'entry' ? 'bg-green-500' : 'bg-blue-500',
-                    hoveredDot === point.id && (point.type === 'entry' ? 'bg-green-600' : 'bg-blue-600'),
+                    'bg-gray-500',
+                    hoveredDot === point.id && 'bg-gray-600',
                     point.side === 'left' && 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2',
                     point.side === 'top' && 'top-0 left-1/2 -translate-x-1/2 -translate-y-1/2',
                     point.side === 'right' && 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2',
@@ -363,7 +357,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
             <div className="font-medium">{nodeStyle.defaultLabel}</div>
             <div className="text-xs opacity-70">{label}</div>
             <div className="text-xs opacity-50 mt-1">
-              Entries: Left, Top, Bottom • Exit: Right
+              All ports can be entry or exit
             </div>
           </div>
         </TooltipContent>

@@ -7,71 +7,44 @@ interface ConnectionPathProps {
   endPoint: { x: number; y: number };
   nodes: Node[];
   isTemporary?: boolean;
+  sourceNodeId?: string;
+  targetNodeId?: string;
+  existingConnections?: Array<{ sourceId: string; targetId: string; sourcePort?: string; targetPort?: string }>;
 }
 
 export const ConnectionPath: React.FC<ConnectionPathProps> = ({
   startPoint,
   endPoint,
   nodes,
-  isTemporary = false
+  isTemporary = false,
+  sourceNodeId,
+  targetNodeId,
+  existingConnections = []
 }) => {
-  const calculatePath = () => {
+  const calculateOptimalPath = () => {
     const start = startPoint;
     const end = endPoint;
     
-    // Calculate orthogonal path with improved obstacle avoidance
+    // Simple orthogonal routing
     const deltaX = end.x - start.x;
     const deltaY = end.y - start.y;
     
-    // Use multiple waypoints for better routing
+    // Use a midpoint approach for clean orthogonal lines
     let waypoints: { x: number; y: number }[] = [];
     
-    // Simple case: direct horizontal connection
-    if (Math.abs(deltaY) < 20) {
-      const midX = start.x + deltaX * 0.5;
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      // More horizontal movement
+      const midX = start.x + deltaX * 0.6;
       waypoints = [
         { x: midX, y: start.y },
         { x: midX, y: end.y }
       ];
     } else {
-      // More complex routing with obstacle avoidance
-      let midX = start.x + deltaX * 0.6;
-      
-      // Check for obstacles and adjust path
-      const obstacleNodes = nodes.filter(node => {
-        const nodeRect = {
-          left: node.x - 20,
-          right: node.x + 164,
-          top: node.y - 20,
-          bottom: node.y + 100
-        };
-        
-        // Check if the intended path intersects with this node
-        const pathIntersects = (
-          midX > nodeRect.left && 
-          midX < nodeRect.right &&
-          ((start.y > nodeRect.top && start.y < nodeRect.bottom) ||
-           (end.y > nodeRect.top && end.y < nodeRect.bottom) ||
-           (start.y < nodeRect.top && end.y > nodeRect.bottom) ||
-           (start.y > nodeRect.bottom && end.y < nodeRect.top))
-        );
-        
-        return pathIntersects;
-      });
-      
-      // Adjust path to avoid obstacles
-      if (obstacleNodes.length > 0) {
-        const obstacle = obstacleNodes[0];
-        if (start.x < obstacle.x) {
-          midX = obstacle.x - 30;
-        } else {
-          midX = obstacle.x + 174;
-        }
-      }
-      
+      // More vertical movement
+      const midY = start.y + deltaY * 0.6;
       waypoints = [
-        { x: midX, y: start.y },
-        { x: midX, y: end.y }
+        { x: start.x, y: midY },
+        { x: end.x, y: midY }
       ];
     }
     
@@ -85,7 +58,7 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
     return pathString;
   };
 
-  const pathData = calculatePath();
+  const pathData = calculateOptimalPath();
 
   return (
     <path
@@ -93,9 +66,18 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
       stroke={isTemporary ? "#3b82f6" : "#6b7280"}
       strokeWidth="2"
       fill="none"
-      strokeDasharray={isTemporary ? "8,4" : "none"}
-      className="transition-all duration-200"
-      style={{ vectorEffect: 'non-scaling-stroke' }}
+      strokeDasharray="8,4"
+      className={cn(
+        "transition-all duration-200",
+        !isTemporary && "animate-[dash_1s_linear_infinite]"
+      )}
+      style={{ 
+        vectorEffect: 'non-scaling-stroke',
+        strokeDashoffset: !isTemporary ? 'var(--dash-offset, 0)' : undefined
+      }}
     />
   );
 };
+
+// Add CSS for dash animation
+const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ');
