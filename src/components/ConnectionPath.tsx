@@ -15,34 +15,74 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
   nodes,
   isTemporary = false
 }) => {
-  // Calculate orthogonal path with obstacle avoidance
   const calculatePath = () => {
     const start = startPoint;
     const end = endPoint;
     
-    // Simple orthogonal routing with basic obstacle avoidance
-    const midX = start.x + (end.x - start.x) * 0.7;
+    // Calculate orthogonal path with improved obstacle avoidance
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
     
-    // Check if path intersects with any nodes and adjust
-    let adjustedMidX = midX;
+    // Use multiple waypoints for better routing
+    let waypoints: { x: number; y: number }[] = [];
     
-    nodes.forEach(node => {
-      if (
-        adjustedMidX > node.x - 20 && 
-        adjustedMidX < node.x + 164 && // node width + padding
-        ((start.y > node.y - 20 && start.y < node.y + 100) || 
-         (end.y > node.y - 20 && end.y < node.y + 100))
-      ) {
-        // Adjust path to go around the node
-        if (start.x < node.x) {
-          adjustedMidX = node.x - 30;
+    // Simple case: direct horizontal connection
+    if (Math.abs(deltaY) < 20) {
+      const midX = start.x + deltaX * 0.5;
+      waypoints = [
+        { x: midX, y: start.y },
+        { x: midX, y: end.y }
+      ];
+    } else {
+      // More complex routing with obstacle avoidance
+      let midX = start.x + deltaX * 0.6;
+      
+      // Check for obstacles and adjust path
+      const obstacleNodes = nodes.filter(node => {
+        const nodeRect = {
+          left: node.x - 20,
+          right: node.x + 164,
+          top: node.y - 20,
+          bottom: node.y + 100
+        };
+        
+        // Check if the intended path intersects with this node
+        const pathIntersects = (
+          midX > nodeRect.left && 
+          midX < nodeRect.right &&
+          ((start.y > nodeRect.top && start.y < nodeRect.bottom) ||
+           (end.y > nodeRect.top && end.y < nodeRect.bottom) ||
+           (start.y < nodeRect.top && end.y > nodeRect.bottom) ||
+           (start.y > nodeRect.bottom && end.y < nodeRect.top))
+        );
+        
+        return pathIntersects;
+      });
+      
+      // Adjust path to avoid obstacles
+      if (obstacleNodes.length > 0) {
+        const obstacle = obstacleNodes[0];
+        if (start.x < obstacle.x) {
+          midX = obstacle.x - 30;
         } else {
-          adjustedMidX = node.x + 174;
+          midX = obstacle.x + 174;
         }
       }
+      
+      waypoints = [
+        { x: midX, y: start.y },
+        { x: midX, y: end.y }
+      ];
+    }
+    
+    // Build the path string
+    let pathString = `M ${start.x} ${start.y}`;
+    waypoints.forEach(point => {
+      pathString += ` L ${point.x} ${point.y}`;
     });
-
-    return `M ${start.x} ${start.y} L ${adjustedMidX} ${start.y} L ${adjustedMidX} ${end.y} L ${end.x} ${end.y}`;
+    pathString += ` L ${end.x} ${end.y}`;
+    
+    return pathString;
   };
 
   const pathData = calculatePath();
@@ -51,10 +91,11 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
     <path
       d={pathData}
       stroke={isTemporary ? "#3b82f6" : "#6b7280"}
-      strokeWidth="3"
+      strokeWidth="2"
       fill="none"
       strokeDasharray={isTemporary ? "8,4" : "none"}
       className="transition-all duration-200"
+      style={{ vectorEffect: 'non-scaling-stroke' }}
     />
   );
 };

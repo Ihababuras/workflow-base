@@ -28,22 +28,37 @@ export const Connection: React.FC<ConnectionProps> = ({
 
   if (!sourceNode || !targetNode) return null;
 
-  // Calculate connection points based on node positions
+  // Calculate optimal connection points
   const getOptimalConnectionPoints = () => {
     const sourceCenter = { x: sourceNode.x + 72, y: sourceNode.y + 40 };
     const targetCenter = { x: targetNode.x + 72, y: targetNode.y + 40 };
     
-    // Choose the best connection points based on relative positions
     let startPoint, endPoint;
     
-    if (sourceCenter.x < targetCenter.x) {
-      // Source is to the left of target
-      startPoint = { x: sourceNode.x + 144, y: sourceNode.y + 40 }; // right side of source
-      endPoint = { x: targetNode.x, y: targetNode.y + 40 }; // left side of target
+    if (sourceNode.type === 'condition') {
+      // For conditions, determine exit point based on target position
+      if (targetCenter.x < sourceCenter.x) {
+        startPoint = { x: sourceNode.x + 36, y: sourceNode.y + 40 }; // left exit
+      } else {
+        startPoint = { x: sourceNode.x + 108, y: sourceNode.y + 40 }; // right exit
+      }
     } else {
-      // Source is to the right of target
-      startPoint = { x: sourceNode.x, y: sourceNode.y + 40 }; // left side of source
-      endPoint = { x: targetNode.x + 144, y: targetNode.y + 40 }; // right side of target
+      // For steps, always use right side as exit
+      startPoint = { x: sourceNode.x + 144, y: sourceNode.y + 40 };
+    }
+    
+    // Target entry point
+    if (targetNode.type === 'condition') {
+      endPoint = { x: targetNode.x + 72, y: targetNode.y }; // top entry
+    } else {
+      // Choose best entry point based on source position
+      if (startPoint.x < targetCenter.x) {
+        endPoint = { x: targetNode.x, y: targetNode.y + 40 }; // left entry
+      } else if (startPoint.y < targetCenter.y) {
+        endPoint = { x: targetNode.x + 72, y: targetNode.y }; // top entry
+      } else {
+        endPoint = { x: targetNode.x + 72, y: targetNode.y + 80 }; // bottom entry
+      }
     }
     
     return { startPoint, endPoint };
@@ -52,12 +67,12 @@ export const Connection: React.FC<ConnectionProps> = ({
   const { startPoint, endPoint } = getOptimalConnectionPoints();
 
   // Calculate path for interaction
-  const midX = startPoint.x + (endPoint.x - startPoint.x) * 0.7;
+  const midX = startPoint.x + (endPoint.x - startPoint.x) * 0.6;
   const pathData = `M ${startPoint.x} ${startPoint.y} L ${midX} ${startPoint.y} L ${midX} ${endPoint.y} L ${endPoint.x} ${endPoint.y}`;
 
   return (
     <g>
-      {/* Background path for hover detection */}
+      {/* Invisible wide path for interaction */}
       {!isTemporary && onDelete && (
         <path
           d={pathData}
@@ -65,6 +80,7 @@ export const Connection: React.FC<ConnectionProps> = ({
           strokeWidth="16"
           fill="none"
           className="cursor-pointer"
+          style={{ pointerEvents: 'all' }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -75,7 +91,7 @@ export const Connection: React.FC<ConnectionProps> = ({
             onDelete();
           }}
         >
-          <title>Delete line</title>
+          <title>Double-click or right-click to delete connection</title>
         </path>
       )}
 
@@ -87,17 +103,20 @@ export const Connection: React.FC<ConnectionProps> = ({
         isTemporary={isTemporary}
       />
       
-      {/* Animated flow dots */}
-      <ConnectionDots pathData={pathData} isVisible={!isTemporary} />
+      {/* Animated flow dots - only for permanent connections */}
+      {!isTemporary && (
+        <ConnectionDots pathData={pathData} isVisible={true} />
+      )}
 
-      {/* Hover tooltip for non-temporary connections */}
+      {/* Hover highlight */}
       {!isTemporary && onDelete && (
         <path
           d={pathData}
-          stroke="transparent"
-          strokeWidth="12"
+          stroke="rgba(239, 68, 68, 0.3)"
+          strokeWidth="6"
           fill="none"
-          className="cursor-pointer hover:stroke-red-400 hover:stroke-opacity-30"
+          className="opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+          style={{ pointerEvents: 'all' }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             onDelete();

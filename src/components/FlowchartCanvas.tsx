@@ -24,7 +24,8 @@ export const FlowchartCanvas = () => {
   const [isConnecting, setIsConnecting] = useState<{ 
     nodeId: string; 
     startPos: { x: number; y: number };
-    startPoint: ConnectionPoint;
+    startSide: string;
+    startType: 'entry' | 'exit';
   } | null>(null);
   const [tempConnection, setTempConnection] = useState<{ x: number; y: number } | null>(null);
   const [highlightedPoint, setHighlightedPoint] = useState<ConnectionPoint | null>(null);
@@ -60,8 +61,16 @@ export const FlowchartCanvas = () => {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
-      // Find nearest connection point
-      const nearest = findNearestConnectionPoint(mouseX, mouseY, nodes, isConnecting.nodeId);
+      // Find nearest valid connection point
+      const nearest = findNearestConnectionPoint(
+        mouseX, 
+        mouseY, 
+        nodes, 
+        isConnecting.nodeId, 
+        60,
+        connections,
+        isConnecting.startType
+      );
       
       if (nearest) {
         setHighlightedPoint(nearest);
@@ -71,7 +80,7 @@ export const FlowchartCanvas = () => {
         setTempConnection({ x: mouseX, y: mouseY });
       }
     }
-  }, [isConnecting, nodes]);
+  }, [isConnecting, nodes, connections]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Delete' && selectedNode) {
@@ -90,31 +99,51 @@ export const FlowchartCanvas = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  const startConnection = useCallback((nodeId: string, position: { x: number; y: number }) => {
-    // Find the exact connection point that was clicked
-    const connectionPoint: ConnectionPoint = {
-      id: `${nodeId}-temp`,
-      nodeId,
-      x: position.x,
-      y: position.y,
-      side: 'right' // This would be determined by the actual click position
-    };
+  const startConnection = useCallback((nodeId: string, position: { x: number; y: number }, side: string) => {
+    // Determine if this is an entry or exit point
+    const node = nodes.find(n => n.id === nodeId);
+    let startType: 'entry' | 'exit' = 'exit';
     
-    setIsConnecting({ nodeId, startPos: position, startPoint: connectionPoint });
-  }, []);
+    if (node) {
+      if (node.type === 'condition') {
+        startType = side === 'top' ? 'entry' : 'exit';
+      } else {
+        startType = side === 'right' ? 'exit' : 'entry';
+      }
+    }
+    
+    setIsConnecting({ 
+      nodeId, 
+      startPos: position, 
+      startSide: side,
+      startType
+    });
+  }, [nodes]);
 
   const endConnection = useCallback((targetNodeId: string) => {
     if (isConnecting && isConnecting.nodeId !== targetNodeId) {
-      addConnection({
-        id: `${isConnecting.nodeId}-${targetNodeId}-${Date.now()}`,
-        sourceId: isConnecting.nodeId,
-        targetId: targetNodeId
-      });
+      // Check if connection already exists
+      const connectionExists = connections.some(conn => 
+        (conn.sourceId === isConnecting.nodeId && conn.targetId === targetNodeId) ||
+        (conn.sourceId === targetNodeId && conn.targetId === isConnecting.nodeId)
+      );
+      
+      if (!connectionExists) {
+        // Determine source and target based on connection types
+        const sourceId = isConnecting.startType === 'exit' ? isConnecting.nodeId : targetNodeId;
+        const targetId = isConnecting.startType === 'exit' ? targetNodeId : isConnecting.nodeId;
+        
+        addConnection({
+          id: `${sourceId}-${targetId}-${Date.now()}`,
+          sourceId,
+          targetId
+        });
+      }
     }
     setIsConnecting(null);
     setTempConnection(null);
     setHighlightedPoint(null);
-  }, [isConnecting, addConnection]);
+  }, [isConnecting, addConnection, connections]);
 
   return (
     <div className="relative h-full overflow-hidden bg-gray-50">
@@ -137,7 +166,7 @@ export const FlowchartCanvas = () => {
         onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
       >
-        {/* Render connections */}
+        {/* SVG layer for connections */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
           {connections.map(connection => (
             <Connection
@@ -162,10 +191,12 @@ export const FlowchartCanvas = () => {
           <ConnectionPoints 
             nodes={nodes} 
             highlightedPoint={highlightedPoint}
+            existingConnections={connections}
+            draggingFromNodeId={isConnecting?.nodeId}
           />
         </svg>
 
-        {/* Render nodes */}
+        {/* Nodes layer */}
         {nodes.map(node => (
           <FlowchartNode
             key={node.id}
@@ -176,6 +207,7 @@ export const FlowchartCanvas = () => {
             onMove={(x, y) => updateNodePosition(node.id, x, y)}
             onStartConnection={startConnection}
             onEndConnection={endConnection}
+            existingConnections={connections}
             style={{ zIndex: 2 }}
           />
         ))}
