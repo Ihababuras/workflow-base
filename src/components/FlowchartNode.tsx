@@ -69,8 +69,17 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(node.label || getNodeStyle(node.type).defaultLabel);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
+  const [hoveredDot, setHoveredDot] = useState<string | null>(null);
 
   const nodeStyle = getNodeStyle(node.type);
+
+  // Connection points around the node
+  const connectionPoints = [
+    { id: 'left', x: node.x, y: node.y + 40, side: 'left' },
+    { id: 'top', x: node.x + 72, y: node.y, side: 'top' },
+    { id: 'right', x: node.x + 144, y: node.y + 40, side: 'right' },
+    { id: 'bottom', x: node.x + 72, y: node.y + 80, side: 'bottom' }
+  ];
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target instanceof HTMLInputElement) return;
@@ -131,14 +140,10 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
     setIsEditing(false);
   }, []);
 
-  const handleConnectionStart = useCallback((e: React.MouseEvent) => {
+  const handleConnectionStart = useCallback((e: React.MouseEvent, point: any) => {
     e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    onStartConnection(node.id, {
-      x: node.x + 150,
-      y: node.y + 40
-    });
-  }, [node.id, node.x, node.y, onStartConnection]);
+    onStartConnection(node.id, { x: point.x, y: point.y });
+  }, [node.id, onStartConnection]);
 
   const handleConnectionEnd = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -163,7 +168,6 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
         )}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
-        title={`${nodeStyle.defaultLabel} - Double-click to delete`}
       >
         <div className={cn('p-3 h-full flex flex-col justify-center', nodeStyle.text)}>
           <div className="flex items-center gap-2 mb-1">
@@ -194,18 +198,27 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
           )}
         </div>
 
-        {/* Connection dots */}
-        <div
-          className="absolute left-0 top-1/2 w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-crosshair transform -translate-y-1/2 -translate-x-1/2 hover:scale-125 transition-transform"
-          onMouseUp={handleConnectionEnd}
-          title="Connection point"
-        />
-        
-        <div
-          className="absolute right-0 top-1/2 w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-crosshair transform -translate-y-1/2 translate-x-1/2 hover:scale-125 transition-transform"
-          onMouseDown={handleConnectionStart}
-          title="Drag to connect"
-        />
+        {/* Connection dots around the node */}
+        {connectionPoints.map((point) => (
+          <div
+            key={point.id}
+            className={cn(
+              'absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
+              hoveredDot === point.id && 'scale-150 bg-blue-600',
+              point.side === 'left' && 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2',
+              point.side === 'top' && 'top-0 left-1/2 -translate-x-1/2 -translate-y-1/2',
+              point.side === 'right' && 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2',
+              point.side === 'bottom' && 'bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2'
+            )}
+            style={{
+              zIndex: 10
+            }}
+            onMouseDown={(e) => handleConnectionStart(e, point)}
+            onMouseUp={handleConnectionEnd}
+            onMouseEnter={() => setHoveredDot(point.id)}
+            onMouseLeave={() => setHoveredDot(null)}
+          />
+        ))}
       </Card>
     </div>
   );

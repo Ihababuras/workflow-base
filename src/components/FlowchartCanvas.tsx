@@ -21,7 +21,39 @@ export const FlowchartCanvas = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<{ nodeId: string; startPos: { x: number; y: number } } | null>(null);
   const [tempConnection, setTempConnection] = useState<{ x: number; y: number } | null>(null);
+  const [nearestTarget, setNearestTarget] = useState<{ nodeId: string; point: { x: number; y: number } } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Get all connection points for all nodes
+  const getAllConnectionPoints = useCallback(() => {
+    const points: Array<{ nodeId: string; x: number; y: number; side: string }> = [];
+    nodes.forEach(node => {
+      points.push(
+        { nodeId: node.id, x: node.x, y: node.y + 40, side: 'left' },
+        { nodeId: node.id, x: node.x + 72, y: node.y, side: 'top' },
+        { nodeId: node.id, x: node.x + 144, y: node.y + 40, side: 'right' },
+        { nodeId: node.id, x: node.x + 72, y: node.y + 80, side: 'bottom' }
+      );
+    });
+    return points;
+  }, [nodes]);
+
+  // Find nearest connection point
+  const findNearestConnectionPoint = useCallback((mouseX: number, mouseY: number, excludeNodeId?: string) => {
+    const points = getAllConnectionPoints().filter(p => p.nodeId !== excludeNodeId);
+    let nearest = null;
+    let minDistance = Infinity;
+
+    points.forEach(point => {
+      const distance = Math.sqrt(Math.pow(point.x - mouseX, 2) + Math.pow(point.y - mouseY, 2));
+      if (distance < minDistance && distance < 50) { // 50px snap distance
+        minDistance = distance;
+        nearest = point;
+      }
+    });
+
+    return nearest;
+  }, [getAllConnectionPoints]);
 
   const handleRightClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,6 +74,7 @@ export const FlowchartCanvas = () => {
       if (isConnecting) {
         setIsConnecting(null);
         setTempConnection(null);
+        setNearestTarget(null);
       }
     }
   }, [isConnecting, setSelectedNode]);
@@ -49,19 +82,33 @@ export const FlowchartCanvas = () => {
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isConnecting && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      setTempConnection({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Find nearest connection point
+      const nearest = findNearestConnectionPoint(mouseX, mouseY, isConnecting.nodeId);
+      
+      if (nearest) {
+        setNearestTarget({ nodeId: nearest.nodeId, point: { x: nearest.x, y: nearest.y } });
+        setTempConnection({ x: nearest.x, y: nearest.y });
+      } else {
+        setNearestTarget(null);
+        setTempConnection({ x: mouseX, y: mouseY });
+      }
     }
-  }, [isConnecting]);
+  }, [isConnecting, findNearestConnectionPoint]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Delete' && selectedNode) {
       deleteNode(selectedNode);
       setSelectedNode(null);
     }
-  }, [selectedNode, deleteNode, setSelectedNode]);
+    if (e.key === 'Escape' && isConnecting) {
+      setIsConnecting(null);
+      setTempConnection(null);
+      setNearestTarget(null);
+    }
+  }, [selectedNode, deleteNode, setSelectedNode, isConnecting]);
 
   React.useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -75,13 +122,14 @@ export const FlowchartCanvas = () => {
   const endConnection = useCallback((targetNodeId: string) => {
     if (isConnecting && isConnecting.nodeId !== targetNodeId) {
       addConnection({
-        id: `${isConnecting.nodeId}-${targetNodeId}`,
+        id: `${isConnecting.nodeId}-${targetNodeId}-${Date.now()}`,
         sourceId: isConnecting.nodeId,
         targetId: targetNodeId
       });
     }
     setIsConnecting(null);
     setTempConnection(null);
+    setNearestTarget(null);
   }, [isConnecting, addConnection]);
 
   return (
@@ -130,11 +178,24 @@ export const FlowchartCanvas = () => {
                   id: 'temp',
                   type: 'step',
                   label: '',
-                  x: tempConnection.x,
-                  y: tempConnection.y
+                  x: tempConnection.x - 72,
+                  y: tempConnection.y - 40
                 }
               ]}
               isTemporary={true}
+            />
+          )}
+          
+          {/* Highlight nearest target */}
+          {nearestTarget && (
+            <circle
+              cx={nearestTarget.point.x}
+              cy={nearestTarget.point.y}
+              r="8"
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="3"
+              className="animate-pulse"
             />
           )}
         </svg>
