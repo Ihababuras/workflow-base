@@ -61,7 +61,10 @@ export const FlowchartCanvas = () => {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
-      // Find nearest valid connection point
+      // Always update temp connection to follow cursor smoothly
+      setTempConnection({ x: mouseX, y: mouseY });
+      
+      // Find nearest valid connection point for snapping
       const nearest = findNearestConnectionPoint(
         mouseX, 
         mouseY, 
@@ -74,10 +77,10 @@ export const FlowchartCanvas = () => {
       
       if (nearest) {
         setHighlightedPoint(nearest);
+        // Snap to the connection point when close enough
         setTempConnection({ x: nearest.x, y: nearest.y });
       } else {
         setHighlightedPoint(null);
-        setTempConnection({ x: mouseX, y: mouseY });
       }
     }
   }, [isConnecting, nodes, connections]);
@@ -134,10 +137,11 @@ export const FlowchartCanvas = () => {
       startSide: side,
       startType
     });
+    setTempConnection(position);
   }, [nodes]);
 
-  const endConnection = useCallback((targetNodeId: string, targetPort?: string) => {
-    console.log('Ending connection at:', targetNodeId, 'port:', targetPort);
+  const endConnection = useCallback((targetNodeId: string, targetSide?: string) => {
+    console.log('Ending connection at:', targetNodeId, 'side:', targetSide);
     if (isConnecting && isConnecting.nodeId !== targetNodeId) {
       // Check if connection already exists
       const connectionExists = connections.some(conn => 
@@ -146,6 +150,9 @@ export const FlowchartCanvas = () => {
       );
       
       if (!connectionExists) {
+        // Use the highlighted point if available, otherwise use the target side
+        const finalTargetSide = highlightedPoint?.side || targetSide;
+        
         // Determine source and target based on connection types
         const sourceId = isConnecting.startType === 'exit' ? isConnecting.nodeId : targetNodeId;
         const targetId = isConnecting.startType === 'exit' ? targetNodeId : isConnecting.nodeId;
@@ -156,7 +163,7 @@ export const FlowchartCanvas = () => {
           sourceId,
           targetId,
           sourcePort: isConnecting.startSide,
-          targetPort: targetPort || highlightedPoint?.side
+          targetPort: finalTargetSide
         });
       }
     }
@@ -169,17 +176,10 @@ export const FlowchartCanvas = () => {
   React.useEffect(() => {
     const handleGlobalMouseUp = (e: MouseEvent) => {
       if (isConnecting) {
-        // Check if we're over a node
-        const elements = document.elementsFromPoint(e.clientX, e.clientY);
-        const nodeElement = elements.find(el => el.closest('[data-node-id]'));
-        
-        if (nodeElement) {
-          const nodeId = nodeElement.closest('[data-node-id]')?.getAttribute('data-node-id');
-          if (nodeId && nodeId !== isConnecting.nodeId) {
-            console.log('Mouse up over node:', nodeId);
-            endConnection(nodeId);
-            return;
-          }
+        // Check if we're over a connection point
+        if (highlightedPoint) {
+          endConnection(highlightedPoint.nodeId, highlightedPoint.side);
+          return;
         }
         
         // Clear connection if not over a valid target
@@ -193,7 +193,7 @@ export const FlowchartCanvas = () => {
       document.addEventListener('mouseup', handleGlobalMouseUp);
       return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
     }
-  }, [isConnecting, endConnection]);
+  }, [isConnecting, endConnection, highlightedPoint]);
 
   return (
     <div className="relative h-full overflow-hidden bg-gray-50">

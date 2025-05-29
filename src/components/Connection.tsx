@@ -34,14 +34,14 @@ export const Connection: React.FC<ConnectionProps> = ({
 
   // Get optimal connection points with dynamic port selection
   const getOptimalConnectionPoints = () => {
-    const sourceCenter = { x: sourceNode.x + 72, y: sourceNode.y + 40 };
-    const targetCenter = { x: targetNode.x + 72, y: targetNode.y + 40 };
-    
     // Get all available ports for each node
     const getAvailablePorts = (node: Node, isSource: boolean) => {
       if (node.type === 'condition') {
         return isSource 
-          ? [{ side: 'left', x: node.x + 36, y: node.y + 40 }, { side: 'right', x: node.x + 108, y: node.y + 40 }]
+          ? [
+              { side: 'left', x: node.x + 36, y: node.y + 40 }, 
+              { side: 'right', x: node.x + 108, y: node.y + 40 }
+            ]
           : [{ side: 'top', x: node.x + 72, y: node.y }];
       } else {
         return [
@@ -53,31 +53,33 @@ export const Connection: React.FC<ConnectionProps> = ({
       }
     };
 
-    // Get used ports to avoid reusing them
-    const getUsedPorts = (nodeId: string, isSource: boolean) => {
-      return existingConnections
-        .filter(conn => (isSource ? conn.sourceId === nodeId : conn.targetId === nodeId))
-        .map(conn => isSource ? conn.sourcePort : conn.targetPort)
-        .filter(Boolean);
-    };
+    // Use specified ports if available
+    if (connection.sourcePort && connection.targetPort) {
+      const sourcePorts = getAvailablePorts(sourceNode, true);
+      const targetPorts = getAvailablePorts(targetNode, false);
+      
+      const sourcePort = sourcePorts.find(p => p.side === connection.sourcePort);
+      const targetPort = targetPorts.find(p => p.side === connection.targetPort);
+      
+      if (sourcePort && targetPort) {
+        return {
+          startPoint: { x: sourcePort.x, y: sourcePort.y },
+          endPoint: { x: targetPort.x, y: targetPort.y }
+        };
+      }
+    }
 
+    // Fallback to automatic port selection
     const sourcePorts = getAvailablePorts(sourceNode, true);
     const targetPorts = getAvailablePorts(targetNode, false);
     
-    const usedSourcePorts = getUsedPorts(sourceNode.id, true);
-    const usedTargetPorts = getUsedPorts(targetNode.id, false);
-
-    // Filter out used ports
-    const availableSourcePorts = sourcePorts.filter(port => !usedSourcePorts.includes(port.side));
-    const availableTargetPorts = targetPorts.filter(port => !usedTargetPorts.includes(port.side));
-
     // Find optimal port combination based on distance
-    let bestSource = availableSourcePorts[0] || sourcePorts[0];
-    let bestTarget = availableTargetPorts[0] || targetPorts[0];
+    let bestSource = sourcePorts[0];
+    let bestTarget = targetPorts[0];
     let minDistance = Infinity;
 
-    availableSourcePorts.forEach(sourcePort => {
-      availableTargetPorts.forEach(targetPort => {
+    sourcePorts.forEach(sourcePort => {
+      targetPorts.forEach(targetPort => {
         const distance = Math.sqrt(
           Math.pow(targetPort.x - sourcePort.x, 2) + 
           Math.pow(targetPort.y - sourcePort.y, 2)
@@ -92,48 +94,15 @@ export const Connection: React.FC<ConnectionProps> = ({
 
     return {
       startPoint: { x: bestSource.x, y: bestSource.y },
-      endPoint: { x: bestTarget.x, y: bestTarget.y },
-      sourcePort: bestSource.side,
-      targetPort: bestTarget.side
+      endPoint: { x: bestTarget.x, y: bestTarget.y }
     };
   };
 
   const { startPoint, endPoint } = getOptimalConnectionPoints();
 
-  // Calculate path for interaction
-  const pathData = `M ${startPoint.x} ${startPoint.y} L ${endPoint.x} ${endPoint.y}`;
-
   return (
     <TooltipProvider>
       <g>
-        {/* Invisible wide path for interaction */}
-        {!isTemporary && onDelete && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <path
-                d={pathData}
-                stroke="transparent"
-                strokeWidth="16"
-                fill="none"
-                className="cursor-pointer"
-                style={{ pointerEvents: 'all' }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDelete();
-                }}
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="text-sm">Delete line</div>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
         {/* Main connection path */}
         <ConnectionPath
           startPoint={startPoint}
@@ -143,28 +112,8 @@ export const Connection: React.FC<ConnectionProps> = ({
           sourceNodeId={connection.sourceId}
           targetNodeId={connection.targetId}
           existingConnections={existingConnections}
+          onDelete={onDelete}
         />
-
-        {/* Hover highlight */}
-        {!isTemporary && onDelete && (
-          <path
-            d={pathData}
-            stroke="rgba(239, 68, 68, 0.3)"
-            strokeWidth="6"
-            fill="none"
-            className="opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ pointerEvents: 'all' }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDelete();
-            }}
-          />
-        )}
       </g>
     </TooltipProvider>
   );

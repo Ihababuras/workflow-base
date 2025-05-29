@@ -20,7 +20,7 @@ interface FlowchartNodeProps {
   onMove: (x: number, y: number) => void;
   onStartConnection: (nodeId: string, position: { x: number; y: number }, side: string) => void;
   onEndConnection: (nodeId: string, targetPort?: string) => void;
-  existingConnections: Array<{ sourceId: string; targetId: string }>;
+  existingConnections: Array<{ sourceId: string; targetId: string; sourcePort?: string; targetPort?: string }>;
   style?: React.CSSProperties;
   isConnecting?: boolean;
 }
@@ -77,6 +77,20 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
   const [hoveredDot, setHoveredDot] = useState<string | null>(null);
 
   const nodeStyle = getNodeStyle(node.type);
+
+  // Get used ports to show as occupied
+  const getUsedPorts = () => {
+    return existingConnections
+      .filter(conn => conn.sourceId === node.id || conn.targetId === node.id)
+      .map(conn => {
+        if (conn.sourceId === node.id) return conn.sourcePort;
+        if (conn.targetId === node.id) return conn.targetPort;
+        return null;
+      })
+      .filter(Boolean);
+  };
+
+  const usedPorts = getUsedPorts();
 
   // Get connection points based on node type
   const getConnectionPoints = () => {
@@ -168,13 +182,6 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
     onStartConnection(node.id, { x: point.x, y: point.y }, point.side);
   }, [node.id, onStartConnection]);
 
-  const handleConnectionEnd = useCallback((e: React.MouseEvent, point: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('Ending connection at point:', point);
-    onEndConnection(node.id, point.side);
-  }, [node.id, onEndConnection]);
-
   // Render diamond shape for condition
   if (node.type === 'condition') {
     return (
@@ -202,18 +209,23 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                 onDoubleClick={handleDoubleClick}
                 style={{ width: '144px', height: '80px' }}
               >
-                {/* Diamond shape using SVG for better precision */}
-                <svg width="144" height="80" className="absolute">
-                  <polygon 
-                    points="72,5 139,40 72,75 5,40" 
-                    className={cn(nodeStyle.bg, 'stroke-2')}
-                    style={{ fill: '#fef3c7', stroke: '#f59e0b' }}
-                  />
-                </svg>
+                {/* Diamond shape using CSS transform */}
+                <div 
+                  className={cn(
+                    'absolute w-20 h-20 transform rotate-45 border-2',
+                    nodeStyle.bg
+                  )}
+                  style={{ 
+                    left: '32px', 
+                    top: '0px',
+                    backgroundColor: '#fef3c7',
+                    borderColor: '#f59e0b'
+                  }}
+                />
                 
                 {/* Content overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className={cn('text-center z-10', nodeStyle.text)}>
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <div className={cn('text-center', nodeStyle.text)}>
                     <div className="text-sm mb-1">{nodeStyle.icon}</div>
                     {isEditing ? (
                       <input
@@ -225,6 +237,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                         className="text-xs bg-transparent border-none outline-none w-full text-center"
                         autoFocus
                         onClick={(e) => e.stopPropagation()}
+                        style={{ userSelect: 'text' }}
                       />
                     ) : (
                       <div
@@ -233,6 +246,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                           isConnecting && 'pointer-events-none select-none'
                         )}
                         onClick={handleLabelClick}
+                        style={{ userSelect: isConnecting ? 'none' : 'text' }}
                       >
                         {label}
                       </div>
@@ -240,54 +254,29 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                   </div>
                 </div>
 
-                {/* Connection dots for diamond - only top (entry), left and right (exits) */}
-                <div
-                  className={cn(
-                    'absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
-                    hoveredDot === 'top' && 'scale-150 bg-blue-600'
-                  )}
-                  style={{ 
-                    left: '69px', 
-                    top: '-6px',
-                    zIndex: 10
-                  }}
-                  onMouseDown={(e) => handleConnectionStart(e, { id: 'top', x: node.x + 72, y: node.y, side: 'top', type: 'entry' })}
-                  onMouseUp={(e) => handleConnectionEnd(e, { id: 'top', x: node.x + 72, y: node.y, side: 'top', type: 'entry' })}
-                  onMouseEnter={() => setHoveredDot('top')}
-                  onMouseLeave={() => setHoveredDot(null)}
-                />
-                
-                <div
-                  className={cn(
-                    'absolute w-3 h-3 bg-green-500 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
-                    hoveredDot === 'left' && 'scale-150 bg-green-600'
-                  )}
-                  style={{ 
-                    left: '-6px', 
-                    top: '34px',
-                    zIndex: 10
-                  }}
-                  onMouseDown={(e) => handleConnectionStart(e, { id: 'left', x: node.x + 5, y: node.y + 40, side: 'left', type: 'exit' })}
-                  onMouseUp={(e) => handleConnectionEnd(e, { id: 'left', x: node.x + 5, y: node.y + 40, side: 'left', type: 'exit' })}
-                  onMouseEnter={() => setHoveredDot('left')}
-                  onMouseLeave={() => setHoveredDot(null)}
-                />
-                
-                <div
-                  className={cn(
-                    'absolute w-3 h-3 bg-green-500 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
-                    hoveredDot === 'right' && 'scale-150 bg-green-600'
-                  )}
-                  style={{ 
-                    left: '135px', 
-                    top: '34px',
-                    zIndex: 10
-                  }}
-                  onMouseDown={(e) => handleConnectionStart(e, { id: 'right', x: node.x + 139, y: node.y + 40, side: 'right', type: 'exit' })}
-                  onMouseUp={(e) => handleConnectionEnd(e, { id: 'right', x: node.x + 139, y: node.y + 40, side: 'right', type: 'exit' })}
-                  onMouseEnter={() => setHoveredDot('right')}
-                  onMouseLeave={() => setHoveredDot(null)}
-                />
+                {/* Connection dots for diamond */}
+                {connectionPoints.map((point) => {
+                  const isUsed = usedPorts.includes(point.side);
+                  return (
+                    <div
+                      key={point.id}
+                      className={cn(
+                        'absolute w-3 h-3 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
+                        hoveredDot === point.id && 'scale-150',
+                        isUsed ? 'bg-orange-500' : point.type === 'entry' ? 'bg-blue-500' : 'bg-green-500',
+                        hoveredDot === point.id && (isUsed ? 'bg-orange-600' : point.type === 'entry' ? 'bg-blue-600' : 'bg-green-600')
+                      )}
+                      style={{ 
+                        left: point.id === 'top' ? '69px' : point.id === 'left' ? '33px' : '105px',
+                        top: point.id === 'top' ? '-6px' : '34px',
+                        zIndex: 20
+                      }}
+                      onMouseDown={(e) => handleConnectionStart(e, point)}
+                      onMouseEnter={() => setHoveredDot(point.id)}
+                      onMouseLeave={() => setHoveredDot(null)}
+                    />
+                  );
+                })}
               </div>
             </div>
           </TooltipTrigger>
@@ -349,6 +338,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                     className="text-sm font-medium bg-transparent border-none outline-none w-full"
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
+                    style={{ userSelect: 'text' }}
                   />
                 ) : (
                   <div
@@ -357,6 +347,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                       isConnecting && 'pointer-events-none select-none'
                     )}
                     onClick={handleLabelClick}
+                    style={{ userSelect: isConnecting ? 'none' : 'text' }}
                   >
                     {label}
                   </div>
@@ -364,26 +355,28 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
               </div>
 
               {/* Connection dots for all four sides */}
-              {connectionPoints.map((point) => (
-                <div
-                  key={point.id}
-                  className={cn(
-                    'absolute w-3 h-3 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
-                    hoveredDot === point.id && 'scale-150',
-                    'bg-gray-500',
-                    hoveredDot === point.id && 'bg-gray-600',
-                    point.side === 'left' && 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2',
-                    point.side === 'top' && 'top-0 left-1/2 -translate-x-1/2 -translate-y-1/2',
-                    point.side === 'right' && 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2',
-                    point.side === 'bottom' && 'bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2'
-                  )}
-                  style={{ zIndex: 10 }}
-                  onMouseDown={(e) => handleConnectionStart(e, point)}
-                  onMouseUp={(e) => handleConnectionEnd(e, point)}
-                  onMouseEnter={() => setHoveredDot(point.id)}
-                  onMouseLeave={() => setHoveredDot(null)}
-                />
-              ))}
+              {connectionPoints.map((point) => {
+                const isUsed = usedPorts.includes(point.side);
+                return (
+                  <div
+                    key={point.id}
+                    className={cn(
+                      'absolute w-3 h-3 rounded-full border-2 border-white cursor-crosshair transition-all duration-200',
+                      hoveredDot === point.id && 'scale-150',
+                      isUsed ? 'bg-orange-500' : 'bg-gray-500',
+                      hoveredDot === point.id && (isUsed ? 'bg-orange-600' : 'bg-gray-600'),
+                      point.side === 'left' && 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2',
+                      point.side === 'top' && 'top-0 left-1/2 -translate-x-1/2 -translate-y-1/2',
+                      point.side === 'right' && 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2',
+                      point.side === 'bottom' && 'bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2'
+                    )}
+                    style={{ zIndex: 20 }}
+                    onMouseDown={(e) => handleConnectionStart(e, point)}
+                    onMouseEnter={() => setHoveredDot(point.id)}
+                    onMouseLeave={() => setHoveredDot(null)}
+                  />
+                );
+              })}
             </Card>
           </div>
         </TooltipTrigger>

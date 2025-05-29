@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Node } from './FlowchartNode';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface ConnectionPathProps {
   startPoint: { x: number; y: number };
@@ -10,6 +11,7 @@ interface ConnectionPathProps {
   sourceNodeId?: string;
   targetNodeId?: string;
   existingConnections?: Array<{ sourceId: string; targetId: string; sourcePort?: string; targetPort?: string }>;
+  onDelete?: () => void;
 }
 
 export const ConnectionPath: React.FC<ConnectionPathProps> = ({
@@ -19,8 +21,11 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
   isTemporary = false,
   sourceNodeId,
   targetNodeId,
-  existingConnections = []
+  existingConnections = [],
+  onDelete
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   const calculateOptimalPath = () => {
     const start = startPoint;
     const end = endPoint;
@@ -60,24 +65,93 @@ export const ConnectionPath: React.FC<ConnectionPathProps> = ({
 
   const pathData = calculateOptimalPath();
 
+  if (isTemporary) {
+    return (
+      <path
+        d={pathData}
+        stroke="#3b82f6"
+        strokeWidth="2"
+        fill="none"
+        strokeDasharray="8,4"
+        className="animate-pulse"
+        style={{ vectorEffect: 'non-scaling-stroke' }}
+      />
+    );
+  }
+
   return (
-    <path
-      d={pathData}
-      stroke={isTemporary ? "#3b82f6" : "#6b7280"}
-      strokeWidth="2"
-      fill="none"
-      strokeDasharray="8,4"
-      className={cn(
-        "transition-all duration-200",
-        !isTemporary && "animate-[dash_1s_linear_infinite]"
-      )}
-      style={{ 
-        vectorEffect: 'non-scaling-stroke',
-        strokeDashoffset: !isTemporary ? 'var(--dash-offset, 0)' : undefined
-      }}
-    />
+    <TooltipProvider>
+      <g>
+        {/* Invisible wide path for interaction */}
+        {onDelete && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <path
+                d={pathData}
+                stroke="transparent"
+                strokeWidth="16"
+                fill="none"
+                className="cursor-pointer"
+                style={{ pointerEvents: 'all' }}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-sm">Double-click or right-click to delete</div>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* Main animated dotted line */}
+        <path
+          d={pathData}
+          stroke="#6b7280"
+          strokeWidth="2"
+          fill="none"
+          strokeDasharray="8,4"
+          className="animate-[dash_2s_linear_infinite]"
+          style={{ 
+            vectorEffect: 'non-scaling-stroke',
+            strokeDashoffset: 'var(--dash-offset, 0)'
+          }}
+        />
+
+        {/* Hover highlight - only show when hovering the line itself */}
+        {isHovered && onDelete && (
+          <path
+            d={pathData}
+            stroke="rgba(239, 68, 68, 0.6)"
+            strokeWidth="4"
+            fill="none"
+            strokeDasharray="8,4"
+            className="animate-pulse"
+            style={{ 
+              vectorEffect: 'non-scaling-stroke',
+              pointerEvents: 'none'
+            }}
+          />
+        )}
+
+        {/* Connection dots animation */}
+        <g className="pointer-events-none">
+          <circle r="3" fill="#3b82f6" opacity="0.8">
+            <animateMotion dur="3s" repeatCount="indefinite" path={pathData} />
+          </circle>
+          <circle r="2" fill="#60a5fa" opacity="0.6">
+            <animateMotion dur="3s" repeatCount="indefinite" path={pathData} begin="1s" />
+          </circle>
+        </g>
+      </g>
+    </TooltipProvider>
   );
 };
-
-// Add CSS for dash animation
-const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ');
