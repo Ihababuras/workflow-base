@@ -1,6 +1,8 @@
 
 import React from 'react';
 import { Node } from './FlowchartNode';
+import { ConnectionPath } from './ConnectionPath';
+import { ConnectionDots } from './ConnectionDots';
 
 export interface ConnectionType {
   id: string;
@@ -26,18 +28,32 @@ export const Connection: React.FC<ConnectionProps> = ({
 
   if (!sourceNode || !targetNode) return null;
 
-  // Calculate connection points
-  const startX = sourceNode.x + 144; // Right side of source node (width: 144px)
-  const startY = sourceNode.y + 40;  // Middle of source node (height: 80px)
-  const endX = targetNode.x;         // Left side of target node
-  const endY = targetNode.y + 40;    // Middle of target node
+  // Calculate connection points based on node positions
+  const getOptimalConnectionPoints = () => {
+    const sourceCenter = { x: sourceNode.x + 72, y: sourceNode.y + 40 };
+    const targetCenter = { x: targetNode.x + 72, y: targetNode.y + 40 };
+    
+    // Choose the best connection points based on relative positions
+    let startPoint, endPoint;
+    
+    if (sourceCenter.x < targetCenter.x) {
+      // Source is to the left of target
+      startPoint = { x: sourceNode.x + 144, y: sourceNode.y + 40 }; // right side of source
+      endPoint = { x: targetNode.x, y: targetNode.y + 40 }; // left side of target
+    } else {
+      // Source is to the right of target
+      startPoint = { x: sourceNode.x, y: sourceNode.y + 40 }; // left side of source
+      endPoint = { x: targetNode.x + 144, y: targetNode.y + 40 }; // right side of target
+    }
+    
+    return { startPoint, endPoint };
+  };
 
-  // Create orthogonal path (90-degree elbows)
-  const midX = startX + (endX - startX) / 2;
-  const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+  const { startPoint, endPoint } = getOptimalConnectionPoints();
 
-  // Calculate path length for animation
-  const pathLength = Math.abs(midX - startX) + Math.abs(endY - startY) + Math.abs(endX - midX);
+  // Calculate path for interaction
+  const midX = startPoint.x + (endPoint.x - startPoint.x) * 0.7;
+  const pathData = `M ${startPoint.x} ${startPoint.y} L ${midX} ${startPoint.y} L ${midX} ${endPoint.y} L ${endPoint.x} ${endPoint.y}`;
 
   return (
     <g>
@@ -63,56 +79,16 @@ export const Connection: React.FC<ConnectionProps> = ({
         </path>
       )}
 
-      {/* Main connection line */}
-      <path
-        d={pathData}
-        stroke={isTemporary ? "#3b82f6" : "#6b7280"}
-        strokeWidth="3"
-        fill="none"
-        strokeDasharray={isTemporary ? "8,4" : "none"}
-        className="transition-all duration-200 pointer-events-none"
+      {/* Main connection path */}
+      <ConnectionPath
+        startPoint={startPoint}
+        endPoint={endPoint}
+        nodes={nodes}
+        isTemporary={isTemporary}
       />
       
       {/* Animated flow dots */}
-      {!isTemporary && (
-        <>
-          <circle
-            r="3"
-            fill="#3b82f6"
-            className="pointer-events-none"
-          >
-            <animateMotion
-              dur="2s"
-              repeatCount="indefinite"
-              path={pathData}
-            />
-          </circle>
-          <circle
-            r="2"
-            fill="#60a5fa"
-            className="pointer-events-none"
-          >
-            <animateMotion
-              dur="2s"
-              repeatCount="indefinite"
-              path={pathData}
-              begin="0.5s"
-            />
-          </circle>
-          <circle
-            r="2"
-            fill="#60a5fa"
-            className="pointer-events-none"
-          >
-            <animateMotion
-              dur="2s"
-              repeatCount="indefinite"
-              path={pathData}
-              begin="1s"
-            />
-          </circle>
-        </>
-      )}
+      <ConnectionDots pathData={pathData} isVisible={!isTemporary} />
 
       {/* Hover tooltip for non-temporary connections */}
       {!isTemporary && onDelete && (

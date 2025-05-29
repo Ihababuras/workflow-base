@@ -3,6 +3,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { FlowchartNode } from './FlowchartNode';
 import { ContextMenu } from './ContextMenu';
 import { Connection } from './Connection';
+import { ConnectionPoints, ConnectionPoint, findNearestConnectionPoint } from './ConnectionPoints';
+import { ConnectionPath } from './ConnectionPath';
 import { useFlowchartState } from '@/hooks/useFlowchartState';
 
 export const FlowchartCanvas = () => {
@@ -19,41 +21,14 @@ export const FlowchartCanvas = () => {
   } = useFlowchartState();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [isConnecting, setIsConnecting] = useState<{ nodeId: string; startPos: { x: number; y: number } } | null>(null);
+  const [isConnecting, setIsConnecting] = useState<{ 
+    nodeId: string; 
+    startPos: { x: number; y: number };
+    startPoint: ConnectionPoint;
+  } | null>(null);
   const [tempConnection, setTempConnection] = useState<{ x: number; y: number } | null>(null);
-  const [nearestTarget, setNearestTarget] = useState<{ nodeId: string; point: { x: number; y: number } } | null>(null);
+  const [highlightedPoint, setHighlightedPoint] = useState<ConnectionPoint | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
-
-  // Get all connection points for all nodes
-  const getAllConnectionPoints = useCallback(() => {
-    const points: Array<{ nodeId: string; x: number; y: number; side: string }> = [];
-    nodes.forEach(node => {
-      points.push(
-        { nodeId: node.id, x: node.x, y: node.y + 40, side: 'left' },
-        { nodeId: node.id, x: node.x + 72, y: node.y, side: 'top' },
-        { nodeId: node.id, x: node.x + 144, y: node.y + 40, side: 'right' },
-        { nodeId: node.id, x: node.x + 72, y: node.y + 80, side: 'bottom' }
-      );
-    });
-    return points;
-  }, [nodes]);
-
-  // Find nearest connection point
-  const findNearestConnectionPoint = useCallback((mouseX: number, mouseY: number, excludeNodeId?: string) => {
-    const points = getAllConnectionPoints().filter(p => p.nodeId !== excludeNodeId);
-    let nearest = null;
-    let minDistance = Infinity;
-
-    points.forEach(point => {
-      const distance = Math.sqrt(Math.pow(point.x - mouseX, 2) + Math.pow(point.y - mouseY, 2));
-      if (distance < minDistance && distance < 50) { // 50px snap distance
-        minDistance = distance;
-        nearest = point;
-      }
-    });
-
-    return nearest;
-  }, [getAllConnectionPoints]);
 
   const handleRightClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,7 +49,7 @@ export const FlowchartCanvas = () => {
       if (isConnecting) {
         setIsConnecting(null);
         setTempConnection(null);
-        setNearestTarget(null);
+        setHighlightedPoint(null);
       }
     }
   }, [isConnecting, setSelectedNode]);
@@ -86,17 +61,17 @@ export const FlowchartCanvas = () => {
       const mouseY = e.clientY - rect.top;
       
       // Find nearest connection point
-      const nearest = findNearestConnectionPoint(mouseX, mouseY, isConnecting.nodeId);
+      const nearest = findNearestConnectionPoint(mouseX, mouseY, nodes, isConnecting.nodeId);
       
       if (nearest) {
-        setNearestTarget({ nodeId: nearest.nodeId, point: { x: nearest.x, y: nearest.y } });
+        setHighlightedPoint(nearest);
         setTempConnection({ x: nearest.x, y: nearest.y });
       } else {
-        setNearestTarget(null);
+        setHighlightedPoint(null);
         setTempConnection({ x: mouseX, y: mouseY });
       }
     }
-  }, [isConnecting, findNearestConnectionPoint]);
+  }, [isConnecting, nodes]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Delete' && selectedNode) {
@@ -106,7 +81,7 @@ export const FlowchartCanvas = () => {
     if (e.key === 'Escape' && isConnecting) {
       setIsConnecting(null);
       setTempConnection(null);
-      setNearestTarget(null);
+      setHighlightedPoint(null);
     }
   }, [selectedNode, deleteNode, setSelectedNode, isConnecting]);
 
@@ -116,7 +91,16 @@ export const FlowchartCanvas = () => {
   }, [handleKeyDown]);
 
   const startConnection = useCallback((nodeId: string, position: { x: number; y: number }) => {
-    setIsConnecting({ nodeId, startPos: position });
+    // Find the exact connection point that was clicked
+    const connectionPoint: ConnectionPoint = {
+      id: `${nodeId}-temp`,
+      nodeId,
+      x: position.x,
+      y: position.y,
+      side: 'right' // This would be determined by the actual click position
+    };
+    
+    setIsConnecting({ nodeId, startPos: position, startPoint: connectionPoint });
   }, []);
 
   const endConnection = useCallback((targetNodeId: string) => {
@@ -129,7 +113,7 @@ export const FlowchartCanvas = () => {
     }
     setIsConnecting(null);
     setTempConnection(null);
-    setNearestTarget(null);
+    setHighlightedPoint(null);
   }, [isConnecting, addConnection]);
 
   return (
@@ -166,38 +150,19 @@ export const FlowchartCanvas = () => {
           
           {/* Temporary connection while dragging */}
           {isConnecting && tempConnection && (
-            <Connection
-              connection={{
-                id: 'temp',
-                sourceId: isConnecting.nodeId,
-                targetId: 'temp'
-              }}
-              nodes={[
-                ...nodes,
-                {
-                  id: 'temp',
-                  type: 'step',
-                  label: '',
-                  x: tempConnection.x - 72,
-                  y: tempConnection.y - 40
-                }
-              ]}
+            <ConnectionPath
+              startPoint={isConnecting.startPos}
+              endPoint={tempConnection}
+              nodes={nodes}
               isTemporary={true}
             />
           )}
           
-          {/* Highlight nearest target */}
-          {nearestTarget && (
-            <circle
-              cx={nearestTarget.point.x}
-              cy={nearestTarget.point.y}
-              r="8"
-              fill="none"
-              stroke="#10b981"
-              strokeWidth="3"
-              className="animate-pulse"
-            />
-          )}
+          {/* Connection points with highlighting */}
+          <ConnectionPoints 
+            nodes={nodes} 
+            highlightedPoint={highlightedPoint}
+          />
         </svg>
 
         {/* Render nodes */}
