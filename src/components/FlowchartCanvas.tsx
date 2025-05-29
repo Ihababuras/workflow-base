@@ -116,6 +116,7 @@ export const FlowchartCanvas = () => {
   }, [isConnecting]);
 
   const startConnection = useCallback((nodeId: string, position: { x: number; y: number }, side: string) => {
+    console.log('Starting connection from:', nodeId, 'at position:', position, 'side:', side);
     const node = nodes.find(n => n.id === nodeId);
     let startType: 'entry' | 'exit' = 'exit';
     
@@ -136,6 +137,7 @@ export const FlowchartCanvas = () => {
   }, [nodes]);
 
   const endConnection = useCallback((targetNodeId: string, targetPort?: string) => {
+    console.log('Ending connection at:', targetNodeId, 'port:', targetPort);
     if (isConnecting && isConnecting.nodeId !== targetNodeId) {
       // Check if connection already exists
       const connectionExists = connections.some(conn => 
@@ -148,6 +150,7 @@ export const FlowchartCanvas = () => {
         const sourceId = isConnecting.startType === 'exit' ? isConnecting.nodeId : targetNodeId;
         const targetId = isConnecting.startType === 'exit' ? targetNodeId : isConnecting.nodeId;
         
+        console.log('Creating connection from', sourceId, 'to', targetId);
         addConnection({
           id: `${sourceId}-${targetId}-${Date.now()}`,
           sourceId,
@@ -161,6 +164,36 @@ export const FlowchartCanvas = () => {
     setTempConnection(null);
     setHighlightedPoint(null);
   }, [isConnecting, addConnection, connections, highlightedPoint]);
+
+  // Handle global mouse up to end connections
+  React.useEffect(() => {
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      if (isConnecting) {
+        // Check if we're over a node
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const nodeElement = elements.find(el => el.closest('[data-node-id]'));
+        
+        if (nodeElement) {
+          const nodeId = nodeElement.closest('[data-node-id]')?.getAttribute('data-node-id');
+          if (nodeId && nodeId !== isConnecting.nodeId) {
+            console.log('Mouse up over node:', nodeId);
+            endConnection(nodeId);
+            return;
+          }
+        }
+        
+        // Clear connection if not over a valid target
+        setIsConnecting(null);
+        setTempConnection(null);
+        setHighlightedPoint(null);
+      }
+    };
+
+    if (isConnecting) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
+    }
+  }, [isConnecting, endConnection]);
 
   return (
     <div className="relative h-full overflow-hidden bg-gray-50">
