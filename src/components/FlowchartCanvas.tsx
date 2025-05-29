@@ -100,7 +100,7 @@ export const FlowchartCanvas = () => {
   }, [handleKeyDown]);
 
   React.useEffect(() => {
-    // Disable text selection on body when connecting
+    // Disable text selection when connecting
     if (isConnecting) {
       document.body.style.userSelect = 'none';
       document.body.style.webkitUserSelect = 'none';
@@ -123,7 +123,6 @@ export const FlowchartCanvas = () => {
       if (node.type === 'condition') {
         startType = side === 'top' ? 'entry' : 'exit';
       } else {
-        // For dynamic ports, default to exit but can be changed
         startType = 'exit';
       }
     }
@@ -136,7 +135,7 @@ export const FlowchartCanvas = () => {
     });
   }, [nodes]);
 
-  const endConnection = useCallback((targetNodeId: string) => {
+  const endConnection = useCallback((targetNodeId: string, targetPort?: string) => {
     if (isConnecting && isConnecting.nodeId !== targetNodeId) {
       // Check if connection already exists
       const connectionExists = connections.some(conn => 
@@ -154,7 +153,7 @@ export const FlowchartCanvas = () => {
           sourceId,
           targetId,
           sourcePort: isConnecting.startSide,
-          targetPort: highlightedPoint?.side
+          targetPort: targetPort || highlightedPoint?.side
         });
       }
     }
@@ -176,15 +175,6 @@ export const FlowchartCanvas = () => {
           backgroundSize: '20px 20px'
         }}
       />
-      
-      {/* CSS for dash animation */}
-      <style>{`
-        @keyframes dash {
-          to {
-            stroke-dashoffset: -12;
-          }
-        }
-      `}</style>
       
       <div
         ref={canvasRef}

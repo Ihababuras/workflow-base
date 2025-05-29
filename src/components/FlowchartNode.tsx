@@ -19,7 +19,7 @@ interface FlowchartNodeProps {
   onDelete: () => void;
   onMove: (x: number, y: number) => void;
   onStartConnection: (nodeId: string, position: { x: number; y: number }, side: string) => void;
-  onEndConnection: (nodeId: string) => void;
+  onEndConnection: (nodeId: string, targetPort?: string) => void;
   existingConnections: Array<{ sourceId: string; targetId: string }>;
   style?: React.CSSProperties;
   isConnecting?: boolean;
@@ -166,9 +166,9 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
     onStartConnection(node.id, { x: point.x, y: point.y }, point.side);
   }, [node.id, onStartConnection]);
 
-  const handleConnectionEnd = useCallback((e: React.MouseEvent) => {
+  const handleConnectionEnd = useCallback((e: React.MouseEvent, point: any) => {
     e.stopPropagation();
-    onEndConnection(node.id);
+    onEndConnection(node.id, point.side);
   }, [node.id, onEndConnection]);
 
   // Render diamond shape for condition
@@ -196,43 +196,40 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                 onMouseDown={handleMouseDown}
                 onDoubleClick={handleDoubleClick}
               >
-                {/* Diamond shape */}
+                {/* Diamond shape using border technique */}
                 <div
                   className={cn(
-                    'w-full h-full transform rotate-45 border-2',
-                    nodeStyle.bg,
-                    'flex items-center justify-center'
+                    'w-full h-full border-2 relative transform rotate-45',
+                    nodeStyle.bg
                   )}
-                  style={{
-                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
-                  }}
+                  style={{ width: '80px', height: '80px', left: '28px', top: '-10px' }}
                 >
-                  <div className={cn('transform -rotate-45 p-2 text-center', nodeStyle.text)}>
-                    <div className="flex items-center gap-1 mb-1 justify-center">
-                      <span className="text-sm">{nodeStyle.icon}</span>
+                  <div className={cn('absolute inset-0 transform -rotate-45 flex items-center justify-center p-2', nodeStyle.text)}>
+                    <div className="text-center">
+                      <div className="text-sm mb-1">{nodeStyle.icon}</div>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={label}
+                          onChange={(e) => setLabel(e.target.value)}
+                          onBlur={handleLabelSubmit}
+                          onKeyDown={(e) => e.key === 'Enter' && handleLabelSubmit()}
+                          className="text-xs bg-transparent border-none outline-none w-full text-center"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <div
+                          className={cn(
+                            'text-xs font-medium truncate cursor-text',
+                            isConnecting && 'pointer-events-none select-none'
+                          )}
+                          onClick={handleLabelClick}
+                        >
+                          {label}
+                        </div>
+                      )}
                     </div>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={label}
-                        onChange={(e) => setLabel(e.target.value)}
-                        onBlur={handleLabelSubmit}
-                        onKeyDown={(e) => e.key === 'Enter' && handleLabelSubmit()}
-                        className="text-xs bg-transparent border-none outline-none w-full text-center"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <div
-                        className={cn(
-                          'text-xs font-medium truncate cursor-text',
-                          isConnecting && 'pointer-events-none select-none'
-                        )}
-                        onClick={handleLabelClick}
-                      >
-                        {label}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -249,7 +246,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                     )}
                     style={{ zIndex: 10 }}
                     onMouseDown={(e) => handleConnectionStart(e, point)}
-                    onMouseUp={handleConnectionEnd}
+                    onMouseUp={(e) => handleConnectionEnd(e, point)}
                     onMouseEnter={() => setHoveredDot(point.id)}
                     onMouseLeave={() => setHoveredDot(null)}
                   />
@@ -344,7 +341,7 @@ export const FlowchartNode: React.FC<FlowchartNodeProps> = ({
                   )}
                   style={{ zIndex: 10 }}
                   onMouseDown={(e) => handleConnectionStart(e, point)}
-                  onMouseUp={handleConnectionEnd}
+                  onMouseUp={(e) => handleConnectionEnd(e, point)}
                   onMouseEnter={() => setHoveredDot(point.id)}
                   onMouseLeave={() => setHoveredDot(null)}
                 />
